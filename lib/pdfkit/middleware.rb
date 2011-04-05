@@ -11,10 +11,12 @@ class PDFKit
     def call(env)
       @request    = Rack::Request.new(env)
 
-      set_request_to_render_as_pdf(env) if render_as_pdf?
+      render_pdf = render_as_pdf?
+
+      set_request_to_render_as_pdf(env) if render_pdf
       status, headers, response = @app.call(env)
 
-      if rendering_pdf? && headers['Content-Type'] =~ /text\/html|application\/xhtml\+xml/
+      if render_pdf && headers['Content-Type'] =~ /text\/html|application\/xhtml\+xml/
         body = response.respond_to?(:body) ? response.body : response.join
         body = PDFKit.new(translate_paths(body, env), @options).to_pdf
         response = [body]
@@ -40,10 +42,6 @@ class PDFKit
       body.gsub(/(href|src)=(['"])\/([^\"']*|[^"']*)['"]/, '\1=\2' + root + '\3\2')
     end
 
-    def rendering_pdf?
-      @render_pdf
-    end
-
     def render_as_pdf?
       request_path_is_pdf = @request.path.match(%r{\.pdf$})
 
@@ -62,7 +60,6 @@ class PDFKit
     end
 
     def set_request_to_render_as_pdf(env)
-      @render_pdf = true
       path = @request.path.sub(%r{\.pdf$}, '')
       %w[PATH_INFO REQUEST_URI].each { |e| env[e] = path }
       env['HTTP_ACCEPT'] = concat(env['HTTP_ACCEPT'], Rack::Mime.mime_type('.html'))
