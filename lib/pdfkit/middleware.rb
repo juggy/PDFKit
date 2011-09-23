@@ -10,6 +10,7 @@ class PDFKit
 
     def call(env)
       @request    = Rack::Request.new(env)
+      @render_pdf = false
 
       render_pdf = render_as_pdf?
 
@@ -18,6 +19,7 @@ class PDFKit
 
       if render_pdf && headers['Content-Type'] =~ /text\/html|application\/xhtml\+xml/
         body = response.respond_to?(:body) ? response.body : response.join
+        body = body.join if body.is_a?(Array)
         body = PDFKit.new(translate_paths(body, env), @options).to_pdf
         response = [body]
 
@@ -37,7 +39,7 @@ class PDFKit
     # Change relative paths to absolute
     def translate_paths(body, env)
       # Host with protocol
-      root = "#{env['rack.url_scheme']}://#{env['HTTP_HOST']}/"
+      root = PDFKit.configuration.root_url || "#{env['rack.url_scheme']}://#{env['HTTP_HOST']}/"
 
       body.gsub(/(href|src)=(['"])\/([^\"']*|[^"']*)['"]/, '\1=\2' + root + '\3\2')
     end
@@ -54,6 +56,17 @@ class PDFKit
             @request.path[0, pattern.length] == pattern
           end
         end
+      elsif request_path_is_pdf && @conditions[:except]
+        rules = [@conditions[:except]].flatten
+        rules.map do |pattern|
+          if pattern.is_a?(Regexp)
+            return false if @request.path =~ pattern
+          else
+            return false if @request.path[0, pattern.length] == pattern
+          end
+        end
+
+        return true
       else
         request_path_is_pdf
       end
